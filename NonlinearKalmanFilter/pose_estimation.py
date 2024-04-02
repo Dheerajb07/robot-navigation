@@ -191,26 +191,46 @@ def plot_pose(position_estimates, euler_estimates, time_estimate, position_vicon
     ax1.set_title('3D Position')
     ax1.legend()
 
-    # Figure 2: Euler angles subplot
-    fig2, axes2 = plt.subplots(3,1)
+    # Figure 2: Position Subplot
+    fig2,axes2 = plt.subplots(3,1)
+
+    # plot estimated position
+    axes2[0].plot(time_estimate, position_estimates[0], label='X (Est)')
+    axes2[1].plot(time_estimate, position_estimates[1], label='Y (Est)')
+    axes2[2].plot(time_estimate, position_estimates[2], label='Z (Est)')
+
+    # plot vicon position
+    axes2[0].plot(time_vicon, position_vicon[0], label='X (Vicon)', linestyle='dashed')
+    axes2[1].plot(time_vicon, position_vicon[1], label='Y (Vicon)', linestyle='dashed')
+    axes2[2].plot(time_vicon, position_vicon[2], label='Z (Vicon)', linestyle='dashed')
+    
+    for ax in axes2:
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Pos (m)')
+        ax.legend()
+
+    fig2.suptitle('Position')
+
+    # Figure 3: Euler angles subplot
+    fig3, axes3 = plt.subplots(3,1)
 
     # Plot estimated Euler angles
-    axes2[0].plot(time_estimate, euler_estimates[0], label='Roll (Est)')
-    axes2[1].plot(time_estimate, euler_estimates[1], label='Pitch (Est)')
-    axes2[2].plot(time_estimate, euler_estimates[2], label='Yaw (Est)')
+    axes3[0].plot(time_estimate, euler_estimates[0], label='Roll (Est)')
+    axes3[1].plot(time_estimate, euler_estimates[1], label='Pitch (Est)')
+    axes3[2].plot(time_estimate, euler_estimates[2], label='Yaw (Est)')
 
     # Plot Vicon Euler angles
-    axes2[0].plot(time_vicon, euler_vicon[0], label='Roll (Vicon)', linestyle='dashed')
-    axes2[1].plot(time_vicon, euler_vicon[1], label='Pitch (Vicon)', linestyle='dashed')
-    axes2[2].plot(time_vicon, euler_vicon[2], label='Yaw (Vicon)', linestyle='dashed')
+    axes3[0].plot(time_vicon, euler_vicon[0], label='Roll (Vicon)', linestyle='dashed')
+    axes3[1].plot(time_vicon, euler_vicon[1], label='Pitch (Vicon)', linestyle='dashed')
+    axes3[2].plot(time_vicon, euler_vicon[2], label='Yaw (Vicon)', linestyle='dashed')
 
-    for ax in axes2:
+    for ax in axes3:
         ax.set_xlabel('Time')
         ax.set_ylabel('Angle (radians)')
         ax.legend()
 
-    fig2.suptitle('Euler Angles')
-
+    fig3.suptitle('Euler Angles')
+    
     # Show plots
     plt.show()
 
