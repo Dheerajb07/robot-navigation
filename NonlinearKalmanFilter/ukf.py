@@ -11,10 +11,10 @@ FILENAME = 'studentdata1.mat'
 N_STATE = 15                    # state vector length
 N_OBS = 6                       # observation vector length
 
-def getSigmaPts(mean, covariance, kappa=0):
+def getSigmaPts(mean, covariance, kappa=1):
     n = len(mean)
-    alpha = 1e-3
-    beta = 2.0    
+    alpha = 1
+    beta = 2
     lambda_ = alpha**2 * (n + kappa) - n
     
     # Calculate sigma points
@@ -26,11 +26,11 @@ def getSigmaPts(mean, covariance, kappa=0):
     weights_mean[0] = lambda_ / (n + lambda_)
     weights_covariance[0] = weights_mean[0] + (1 - alpha**2 + beta)
 
-    sqrt_covariance = sqrtm((n + lambda_) * covariance)
+    sqrt_covariance = sqrtm((n + lambda_) * np.round(covariance,4))
 
     for i in range(n):
-        sigma_points[i+1] = mean + sqrt_covariance[i]
-        sigma_points[i+1+n] = mean - sqrt_covariance[i]
+        sigma_points[i+1] = mean + sqrt_covariance[:,i]
+        sigma_points[i+1+n] = mean - sqrt_covariance[:,i]
 
         weights_mean[i+1] = 1/(2*(n + lambda_))
         weights_covariance[i+1] = weights_mean[i+1]
@@ -59,12 +59,12 @@ def process_model(x_prev,u_w,u_a):
     p_ddot = g + Rot_q @ u_a
 
     # change in gyroscope bias
-    Q_g = 1e-6*np.eye(3)    # covariace
+    Q_g = 1e-3*np.eye(3)    # covariace
     mu_g = np.zeros(3)      # mean
     bg_dot = np.random.multivariate_normal(mu_g,Q_g)
 
     # change in accelerometer bias
-    Q_a = 1e-6*np.eye(3)         # covariance
+    Q_a = 1e-3*np.eye(3)    # covariance
     mu_a = np.zeros(3)      # mean
     ba_dot = np.random.multivariate_normal(mu_a,Q_a)
 
@@ -84,8 +84,13 @@ def prediction(X_prev,P_prev,u_curr):
 
     # Compute the predicted mean and covariance using the weighted sum
     X_est = W_m @ X_s_est
-    residual = X_s_est - X_est.reshape(1, -1)
-    P_est = (W_c * residual.T ) @ residual
+    # residual_1 = X_s_est - X_est.reshape(1, -1)
+    P_est = np.zeros((N_STATE,N_STATE))
+    for i in range(X_s_est.shape[0]):
+        residual = (X_s_est[i,:] - X_est).reshape((N_STATE,1))
+        P_est += W_c[i] * residual @ residual.T
+
+    # P_est_1 = (W_c * residual_1.T) @ residual_1
 
     return X_est, P_est, X_s_est
 
@@ -99,15 +104,15 @@ def obs_model(X_prev,R):
     return Z_est
 
 def update(X_est,P_est,Z_m,X_s_est):
-    n_obs = 6
+    # n_obs = 6
     # measurement model covariance
-    R = 1e-3*np.eye(n_obs)
+    R = 1e-3*np.eye(N_OBS)
     
     # get sigma points with estimated mean and covariance
     Z_s, W_m, W_c = getSigmaPts(X_est,P_est)
 
     # pass pts through measurement model
-    Z_s_est = np.full((Z_s.shape[0],n_obs),np.nan)
+    Z_s_est = np.full((Z_s.shape[0],N_OBS),np.nan)
     for i in range(Z_s.shape[0]):
         Z_s_est[i] = obs_model(Z_s[i],R)
 
@@ -115,12 +120,21 @@ def update(X_est,P_est,Z_m,X_s_est):
     Z_est = W_m @ Z_s_est
 
     # innovation matrix
-    residual_z = Z_s_est - Z_est.reshape(1,-1)
-    S = W_c*residual_z.T @ residual_z + R
+    S = np.zeros((N_OBS,N_OBS))
+    Pxz = np.zeros((N_STATE,N_OBS))
+    for i in range(Z_s_est.shape[0]):
+        residual_z = (Z_s_est[i,:] - Z_est).reshape((N_OBS,1))
+        residual_x = (X_s_est[i,:] - X_est).reshape((N_STATE,1))
+
+        S += W_c[i] * residual_z @ residual_z.T
+        Pxz =+ W_c[i] * residual_x @ residual_z.T
+        
+    # residual_z = Z_s_est - Z_est.reshape(1,-1)
+    # S = W_c*residual_z.T @ residual_z + R
+    # residual_x = X_s_est - X_est.reshape(1,-1)
+    # Pxz = W_c * residual_x.T @ residual_z
     
-    # kalman gain
-    residual_x = X_s_est - X_est.reshape(1,-1)
-    Pxz = W_c * residual_x.T @ residual_z
+    # kalman gain       
     K = Pxz @ np.linalg.inv(S)
 
     # update state estimates
@@ -130,9 +144,9 @@ def update(X_est,P_est,Z_m,X_s_est):
     return X_updated, P_updated
 
 # Load .mat file
-file_name = 'studentdata1.mat'
+# file_name = 'studentdata1.mat'
 curr_path = str(os.path.dirname(os.path.abspath(__file__)))
-file_path = curr_path + '/data/' + file_name
+file_path = curr_path + '/data/' + FILENAME
 mat_data = scipy.io.loadmat(file_path,simplify_cells=True)
 
 # extract data
@@ -141,9 +155,9 @@ vicon_data = mat_data['vicon']
 time_vicon = mat_data['time']
 
 # init state vector
-X_prev = np.hstack((vicon_data[:9,0],1e-3*np.ones(6)))
+X_prev = np.hstack((vicon_data[:9,0],0*np.ones(6)))
 # init covariance matrix
-P_prev = 1e-1*np.eye(len(X_prev))
+P_prev = 0*np.eye(len(X_prev))
 # init time
 t_prev = time_vicon[0]
 
@@ -156,15 +170,12 @@ n_bg = 0
 n_ba = 0
 for i in range(len(sensor_data)):
     data = sensor_data[i]
+    # print(i)
     # parse imu data data
     w = data['rpy']
     a = data['acc']
-    w_hat = w + X_prev[9:12] + n_bg
-    Rot = Rotation.from_euler('zxy', X_prev[3:6], degrees=False).as_matrix()
-    g = np.array([0,0,-9.81])
-    a_hat = Rot.T @ (a-g) + X_prev[12:] + n_ba
+    u_curr = np.vstack((w,a))
 
-    u_curr = np.vstack((w_hat,a_hat))
     t_filtered[i] = data['t']
     # get camera pose estimates
     pos, euler = pe.estimate_pose(data)
