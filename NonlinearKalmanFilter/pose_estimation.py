@@ -8,6 +8,19 @@ from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation
 
 def getData(file_name):
+    """
+    Loads data from a .mat file containing sensor data and ground truth information.
+
+    Inputs:
+        - file_name: Name of the .mat file (string)
+
+    Outputs:
+        - sensor_data: Sensor data (list of dicts)
+        - position_vicon: Ground truth positions from Vicon (3xN numpy array)
+        - euler_vicon: Ground truth Euler angles from Vicon (3xN numpy array)
+        - time_vicon: Timestamp vector (numpy array of length N)
+
+    """
     # Load .mat file
     curr_path = str(os.path.dirname(os.path.abspath(__file__)))
     file_path = curr_path + '/data/' + file_name
@@ -25,6 +38,16 @@ def getData(file_name):
     return sensor_data,position_vicon,euler_vicon,time_vicon
 
 def getImagePoints(p1,p2,p3,p4):
+    """
+    Rearranges and stacks corner points of an image into a format suitable for OpenCV functions.
+
+    Inputs:
+        - p1, p2, p3, p4: Arrays of april-tag corner points image co-ordinates (numpy arrays)
+
+    Output:
+        N corner point image co-ordinates stacked into a single array (Nx2 numpy array, float32)
+
+    """
     # check dims of all arrays
     if np.ndim(p1) == 1:
         p1 = p1.reshape((2,1))
@@ -38,6 +61,16 @@ def getImagePoints(p1,p2,p3,p4):
     return np.hstack((p1,p2,p3,p4)).astype('float32').T
 
 def getWorldPoints(april_tags):
+    """
+    Calculates the world coordinates of corner points of April tags.
+
+    Input:
+        - april_tags: IDs of the April tags (list)
+
+    Output:
+        World coordinates of N corner points (Nx3 numpy array, float32)
+
+    """
     # Init map with tags 
     tag_ids = np.array([
     [0, 12, 24, 36, 48, 60, 72, 84, 96],
@@ -89,6 +122,18 @@ def getWorldPoints(april_tags):
     return np.vstack((p1_w,p2_w,p3_w,p4_w)).astype('float32')
 
 def cam2robotframe(tvec,rvec):
+    """
+    Calculates robot/IMU frame pose from camera pose
+
+    Inputs:
+        - tvec: Translation vector of world frame w.r.t camera frame (3x1 numpy array)
+        - rvec: Rotation vector of world frame w.r.t camera frame (3x1 numpy array)
+
+    Output:
+        - P_imu_world: Position of robot/IMU frame w.r.t world frame (3X1 numpy array)
+        - euler_xyz: Euler angles of robot/IMU frame w.r.t world frame (3X1 numpy array)
+
+    """
     # IMU-camera parameters
     XYZ = [-0.04, 0.0, -0.03]
     Yaw = pi/4
@@ -123,6 +168,17 @@ def cam2robotframe(tvec,rvec):
     return P_imu_world , euler_xyz
 
 def estimate_pose(data):
+    """
+    Estimates the robot pose (position and orientation) from camera data.
+
+    Input:
+        - data: Camera data containing corner points and tag IDs (dictionary)
+
+    Output:
+        - pos: Position of robot/IMU frame w.r.t world frame (3X1 numpy array)
+        - euler: Euler angles of robot/IMU frame w.r.t world frame (3X1 numpy array)
+
+    """
     # parameters
     camera_matrix = np.array([[314.1779, 0, 199.4848], 
                             [0, 314.2218, 113.7838],
@@ -153,6 +209,18 @@ def estimate_pose(data):
     return pos, euler
 
 def getPoseEstimates(cam_data):
+    """
+    Estimates robot pose for all camera data instances
+
+    Input:
+        - cam_data: List of dictionaries containing camera data instances (Length N)
+
+    Output:
+        - position_estimates: robot position estimates (3xN numpy array)
+        - euler_estimates: robot euler angle estimates (3xN numpy array) 
+        - time_estimate: corresponding timestamps of the estimates (numpy array, length N)
+
+    """
     # vars to store pose estimations
     position_estimates = np.full((3,len(cam_data)),np.nan)
     euler_estimates = np.full((3,len(cam_data)),np.nan)
@@ -175,6 +243,21 @@ def getPoseEstimates(cam_data):
 ############################ TRAJECTORY VISUALIZATION #################################
 
 def plot_pose(position_estimates, euler_estimates, time_estimate, position_vicon, euler_vicon, time_vicon):
+    """
+    Plots the estimated and ground truth poses against each other
+
+    Inputs:
+        - position_estimates: Estimated positions (3xN numpy array)
+        - euler_estimates: Estimated Euler angles (3xN numpy array)
+        - time_estimate: Timestamps for estimated poses (numpy array, length N)
+        - position_vicon: Ground truth positions from Vicon (3xN numpy array)
+        - euler_vicon: Ground truth Euler angles from Vicon (3xN numpy array)
+        - time_vicon: Timestamps for ground truth poses (numpy array, length N)
+
+    Outputs:
+        None
+
+    """
     # Figure 1: 3D position plot
     fig1 = plt.figure()
     ax1 = fig1.add_subplot(111, projection='3d')
@@ -235,6 +318,16 @@ def plot_pose(position_estimates, euler_estimates, time_estimate, position_vicon
     plt.show()
 
 def visualize_trajectory(file_name):
+    """
+    Visualizes the trajectory by plotting estimated and ground truth poses for the given dataset
+
+    Inputs:
+        - file_name: Name of the .mat file containing data (string)
+
+    Outputs:
+        None
+
+    """
     # Extract data from mat file
     cam_data,position_vicon,euler_vicon,time_vicon = getData(file_name)
         
@@ -247,6 +340,18 @@ def visualize_trajectory(file_name):
 ############################### COVARIANCE ESTIMATION ################################
 
 def interpolate_data(estimated_data, estimated_timestamps, ground_truth_timestamps):
+    """
+    Interpolates estimated data to match ground truth timestamps.
+
+    Inputs:
+        - estimated_data: Estimated data - position, euler angles (6XN numpy array)
+        - estimated_timestamps: Timestamps for estimated data (numpy array)
+        - ground_truth_timestamps: Timestamps for ground truth data (numpy array)
+
+    Outputs:
+        - interpolated_data: Interpolated data (6XN numpy array)
+
+    """
     # Clean data
     # Find indices of non-NaN values
     valid_indices = ~np.isnan(estimated_data).any(axis=0)
@@ -266,6 +371,16 @@ def interpolate_data(estimated_data, estimated_timestamps, ground_truth_timestam
     return interpolated_data
 
 def estimate_covariances(file_name):
+    """
+    Estimates the covariance matrix from camera pose estimates.
+
+    Inputs:
+        - file_name: Name of the .mat file containing data (string)
+
+    Outputs:
+        - R: Covariance matrix (6x6 numpy array)
+
+    """
     # Extract data from mat file
     cam_data,position_vicon,euler_vicon,time_vicon = getData(file_name)
         
