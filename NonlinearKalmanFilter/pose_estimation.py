@@ -259,7 +259,7 @@ def plot_pose(position_estimates, euler_estimates, time_estimate, position_vicon
 
     """
     # Figure 1: 3D position plot
-    fig1 = plt.figure()
+    fig1 = plt.figure(figsize=(4,3.5))
     ax1 = fig1.add_subplot(111, projection='3d')
 
     # Plot estimated position in blue
@@ -401,4 +401,4 @@ def estimate_covariances(file_name):
     observation_residual = intp_data - groundtruth_data
     R = observation_residual @ observation_residual.T / (n-1)
 
-    return R
+    return np.round(R,5)
