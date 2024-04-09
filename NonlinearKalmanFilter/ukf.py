@@ -26,11 +26,11 @@ def getSigmaPts(mean, covariance, kappa=1):
     weights_mean[0] = lambda_ / (n + lambda_)
     weights_covariance[0] = weights_mean[0] + (1 - alpha**2 + beta)
 
-    sqrt_covariance = sqrtm((n + lambda_) * np.round(covariance,4))
+    sqrt_covariance = cholesky((n + lambda_) * covariance)
 
     for i in range(n):
-        sigma_points[i+1] = mean + sqrt_covariance[:,i]
-        sigma_points[i+1+n] = mean - sqrt_covariance[:,i]
+        sigma_points[i+1] = mean + sqrt_covariance[i]
+        sigma_points[i+1+n] = mean - sqrt_covariance[i]
 
         weights_mean[i+1] = 1/(2*(n + lambda_))
         weights_covariance[i+1] = weights_mean[i+1]
@@ -40,7 +40,7 @@ def getSigmaPts(mean, covariance, kappa=1):
 
     return sigma_points, weights_mean, weights_covariance
 
-def process_model(x_prev,u_w,u_a):
+def process_model(x_prev,u_w,u_a,dt):
     p = x_prev[:3]
     q = x_prev[3:6]
 
@@ -49,38 +49,55 @@ def process_model(x_prev,u_w,u_a):
 
     # change in angular velocity
     G_q = np.array([[np.cos(q[1]), 0, -np.cos(q[0])*np.sin(q[1])],
-                    [0,            1,  0                        ],
-                    [np.sin(q[1]), 0,  np.cos(q[0]*np.cos(q[1]))],])   
+                    [0,            1,  np.sin(q[0])             ],
+                    [np.sin(q[1]), 0,  np.cos(q[0])*np.cos(q[1])]])   
     q_dot = np.linalg.inv(G_q) @ u_w
 
     # change in acceleration
     g = np.array([0, 0, -9.81])
-    Rot_q = Rotation.from_euler('zxy',q, degrees=False).as_matrix()
-    p_ddot = g + Rot_q @ u_a
+    phi, theta, psi = q
+    # Compute individual rotation matrices
+    R_z = np.array([[np.cos(psi), -np.sin(psi), 0],
+                    [np.sin(psi), np.cos(psi), 0],
+                    [0, 0, 1]])
+
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(theta), -np.sin(theta)],
+                    [0, np.sin(theta), np.cos(theta)]])
+
+    R_y = np.array([[np.cos(phi), 0, np.sin(phi)],
+                    [0, 1, 0],
+                    [-np.sin(phi), 0, np.cos(phi)]])
+    # Compute composite rotation matrix
+    R_q = R_z @ R_x @ R_y
+    # Rot_q = Rotation.from_euler('zxy',q, degrees=False).as_matrix()
+    p_ddot = g + R_q @ u_a
 
     # change in gyroscope bias
-    Q_g = 1e-3*np.eye(3)    # covariace
+    Q_g = 1e-6*np.eye(3)    # covariace
     mu_g = np.zeros(3)      # mean
     bg_dot = np.random.multivariate_normal(mu_g,Q_g)
 
     # change in accelerometer bias
-    Q_a = 1e-3*np.eye(3)    # covariance
+    Q_a = 1e-6*np.eye(3)    # covariance
     mu_a = np.zeros(3)      # mean
     ba_dot = np.random.multivariate_normal(mu_a,Q_a)
 
     # change in state
     x_dot = np.hstack((p_dot,q_dot,p_ddot,bg_dot,ba_dot))
 
-    return x_dot
+    return x_prev + x_dot*dt
 
-def prediction(X_prev,P_prev,u_curr):
+def prediction(X_prev,P_prev,u_curr,dt):
+    # process noise                               
+    Q = 1e-3*np.eye(N_STATE)
     # get sigma points
     X_s, W_m, W_c = getSigmaPts(X_prev,P_prev)
 
     # pass sigma points through process model
     X_s_est = np.full(X_s.shape,np.nan)
     for i in range(X_s.shape[0]):
-        X_s_est[i] = process_model(X_s[i],u_curr[0],u_curr[1])
+        X_s_est[i] = process_model(X_s[i],u_curr[0],u_curr[1],dt)
 
     # Compute the predicted mean and covariance using the weighted sum
     X_est = W_m @ X_s_est
@@ -89,7 +106,7 @@ def prediction(X_prev,P_prev,u_curr):
     for i in range(X_s_est.shape[0]):
         residual = (X_s_est[i,:] - X_est).reshape((N_STATE,1))
         P_est += W_c[i] * residual @ residual.T
-
+    P_est += Q
     # P_est_1 = (W_c * residual_1.T) @ residual_1
 
     return X_est, P_est, X_s_est
@@ -157,7 +174,7 @@ time_vicon = mat_data['time']
 # init state vector
 X_prev = np.hstack((vicon_data[:9,0],0*np.ones(6)))
 # init covariance matrix
-P_prev = 0*np.eye(len(X_prev))
+P_prev = 1e-3*np.eye(len(X_prev))
 # init time
 t_prev = time_vicon[0]
 
@@ -170,21 +187,23 @@ n_bg = 0
 n_ba = 0
 for i in range(len(sensor_data)):
     data = sensor_data[i]
-    # print(i)
+    t_curr = data['t']
+    dt = t_curr - t_prev
+    print(i)
     # parse imu data data
     w = data['rpy']
     a = data['acc']
     u_curr = np.vstack((w,a))
 
-    t_filtered[i] = data['t']
     # get camera pose estimates
     pos, euler = pe.estimate_pose(data)
 
-    X_est, P_est, X_s_est = prediction(X_prev,P_prev,u_curr)
+    X_est, P_est, X_s_est = prediction(X_prev,P_prev,u_curr,dt)
     X_curr, P_curr = update(X_est,P_est,np.hstack((pos,euler)),X_s_est)
 
     X_filtered[:,i] = X_curr
-
+    t_filtered[i] = t_curr
+    t_prev = t_curr
     X_prev = X_curr
     P_prev = P_curr
 
