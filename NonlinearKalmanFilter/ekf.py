@@ -5,6 +5,17 @@ import pose_estimation as pe
 import sympy as sp
 
 def process_model_sym():
+    """
+    Defines the symbolic process model
+
+    Inputs:
+        - None
+
+    Outputs:
+        - X_dot: Derivative of the state vector with respect to time, represented as a 15x1 sympy.Matrix 
+        - X: State vector represented as a 15x1 sympy.Matrix
+
+    """
     # Init symbolic variables
     p = sp.Matrix([sp.Symbol('x'), sp.Symbol('y'), sp.Symbol('z')])
     q = sp.Matrix([sp.Symbol('phi'), sp.Symbol('theta'), sp.Symbol('psi')])
@@ -61,11 +72,44 @@ def process_model_sym():
     return X_dot,X
 
 def obs_model_sym():
+    """
+    Defines the symbolic observation model
+    Inputs:
+        - None
+    Outputs:
+        - Z: Observation vector represented as a 6x1 sympy.Matrix.
+    """
     Z = sp.Matrix([sp.symbols('x y z phi theta psi')])
     return Z
 
 class EKF():
+    """
+    Implements an Extended Kalman Filter (EKF) for state estimation of dynamic systems modeled by specified process and observation models.
+
+    Constructor Inputs:
+        - N_STATE: Integer specifying the size of the state vector.
+        - N_OBS: Integer specifying the size of the observation vector.
+        - process_model: Function that returns the symbolic representation of the process model.
+        - obs_model: Function that returns the symbolic representation of the observation model.
+
+    Attributes:
+        - X: Current state estimate as a numpy array (N_STATE x 1).
+        - P: Current estimate of the state covariance matrix, indicating the uncertainty in the state estimate (N_STATE x N_STATE numpy array).
+        - Q: Process noise covariance matrix (N_STATE x N_STATE numpy array).
+        - R: Measurement noise covariance matrix (N_OBS x N_OBS numpy array).
+        - K: Kalman gain matrix (N_STATE x N_OBS numpy array).
+        - A: Jacobian of the process model with respect to the state, evaluated at the current state and input (N_STATE x N_STATE numpy array).
+        - C: Jacobian of the observation model with respect to the state, evaluated at the current state (N_STATE x N_OBS numpy array).
+
+    Methods:
+        - eval_f(x, u): Evaluates the change in state based on the current state x and control input u.
+        - eval_A(x, u): Evaluates the Jacobian of the process model at the current state x and control input u.
+        - predict(u, dt): Predicts the next state and covariance matrix based on the current state, control input u, and timestep dt.
+        - update(z): Updates the state and covariance estimates based on the new observation z.
+
+    """
     def __init__(self,N_STATE,N_OBS,process_model,obs_model):
+        
         self.N_STATE = N_STATE
         self.N_OBS = N_OBS
         # init state and covariance matrices
@@ -157,6 +201,13 @@ class EKF():
         self.P = (np.eye(self.N_STATE) - self.K @ self.C) @ self.P_est
 
 def ExtendedKalmanFilter(FILENAME):
+    """
+    Executes the Extended Kalman Filter (EKF) algorithm for state estimation using sensor data.
+    Inputs:
+        - FILENAME: String specifying the path to the .mat file containing data
+    Outputs:
+        - None. 
+    """
     ## PARAMS
     N_STATE = 15           # state vector length
     N_OBS = 6              # observation vector length
