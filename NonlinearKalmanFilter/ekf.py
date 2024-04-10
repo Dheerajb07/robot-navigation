@@ -3,7 +3,6 @@ import numpy as np
 import scipy.io
 import pose_estimation as pe
 import sympy as sp
-from sympy.stats import Normal
 
 def process_model_sym():
     # Init symbolic variables
@@ -157,60 +156,68 @@ class EKF():
         # update uncertainity
         self.P = (np.eye(self.N_STATE) - self.K @ self.C) @ self.P_est
 
-## PARAMS
-FILENAME = 'studentdata1.mat'
-N_STATE = 15                    # state vector length
-N_OBS = 6                       # observation vector length
+def ExtendedKalmanFilter(FILENAME):
+    ## PARAMS
+    N_STATE = 15           # state vector length
+    N_OBS = 6              # observation vector length
 
-# Load .mat file
-curr_path = str(os.path.dirname(os.path.abspath(__file__)))
-file_path = curr_path + '/data/' + FILENAME
-mat_data = scipy.io.loadmat(file_path,simplify_cells=True)
+    # Load .mat file
+    curr_path = str(os.path.dirname(os.path.abspath(__file__)))
+    file_path = curr_path + '/data/' + FILENAME
+    mat_data = scipy.io.loadmat(file_path,simplify_cells=True)
 
-# extract data
-sensor_data = mat_data['data']
-vicon_data = mat_data['vicon']
-time_vicon = mat_data['time']
+    # extract data
+    sensor_data = mat_data['data']
+    vicon_data = mat_data['vicon']
+    time_vicon = mat_data['time']
 
-# init EKF
-ekf = EKF(N_STATE,N_OBS,process_model_sym,obs_model_sym)
-# init process noise
-ekf.Q *= 1e-3
-# init measurement noise
-ekf.R *= 1e-3
-# init state vector
-ekf.X = np.hstack((vicon_data[:9,0],0*np.ones(6)))
-# init covariance matrix
-ekf.P *= 1e-3
-# init time
-t_prev = time_vicon[0]
+    # init EKF
+    ekf = EKF(N_STATE,N_OBS,process_model_sym,obs_model_sym)
+    # init process noise
+    ekf.Q *= 1e-4
+    # init measurement noise
+    ekf.R *= 1e-3
+    # init state vector
+    ekf.X = np.hstack((vicon_data[:9,0],0*np.ones(6)))
+    # init covariance matrix
+    ekf.P *= 1e-3
+    # init time
+    t_prev = time_vicon[0]
 
-# filtered states
-X_filtered = np.full((15,vicon_data.shape[1]),np.nan)
-t_filtered = np.full(len(time_vicon),np.nan)
+    # filtered states
+    X_filtered = np.full((15,vicon_data.shape[1]),np.nan)
+    t_filtered = np.full(len(time_vicon),np.nan)
 
-for i in range(len(sensor_data)):
-    print(i)
-    data = sensor_data[i]
-    # retreive control input, measurement and time for current step
-    w = data['rpy']
-    a = data['acc']
-    u_curr = np.hstack((w,a))
-    # get camera pose estimates
-    pos, euler = pe.estimate_pose(data)
-    z_curr = np.hstack((pos,euler))
-    # time
-    t_curr = data['t']
-    dt = t_curr - t_prev 
+    for i in range(len(sensor_data)):
+        data = sensor_data[i]
+        # time
+        t_curr = data['t']
+        dt = t_curr - t_prev 
+        # retreive control input, measurement and time for current step
+        if FILENAME=='studentdata0.mat':
+            w = data['drpy']
+        else:
+            w = data['omg']
+        a = data['acc']
+        u_curr = np.hstack((w,a))
+        # get camera pose estimates
+        pos, euler = pe.estimate_pose(data)
+        z_curr = np.hstack((pos,euler))
 
-    ekf.predict(u_curr,dt)
-    ekf.update(z_curr)
+        if len(z_curr)==0:
+            X_filtered[:,i] = np.full(len(ekf.X),np.nan)
+            t_filtered[i] = t_curr
+            t_prev = t_curr
+            continue
 
-    X_filtered[:,i] = ekf.X
-    t_filtered[i] = t_curr
-    t_prev = t_curr
+        ekf.predict(u_curr,dt)
+        ekf.update(z_curr)
 
-pos_filtered = X_filtered[:3,:]
-euler_filtered = X_filtered[3:6,:]
+        X_filtered[:,i] = ekf.X
+        t_filtered[i] = t_curr
+        t_prev = t_curr
 
-pe.plot_pose(pos_filtered,euler_filtered,t_filtered,vicon_data[:3,:],vicon_data[3:6,:],time_vicon)
+    pos_filtered = X_filtered[:3,:]
+    euler_filtered = X_filtered[3:6,:]
+
+    pe.plot_pose(pos_filtered,euler_filtered,t_filtered,vicon_data[:3,:],vicon_data[3:6,:],time_vicon)
