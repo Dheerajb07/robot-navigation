@@ -174,9 +174,9 @@ def ExtendedKalmanFilter(FILENAME):
     # init EKF
     ekf = EKF(N_STATE,N_OBS,process_model_sym,obs_model_sym)
     # init process noise
-    ekf.Q *= 1e-4
+    ekf.Q *= 1e-3
     # init measurement noise
-    ekf.R *= 1e-3
+    ekf.R *= 0.5*1e-2
     # init state vector
     ekf.X = np.hstack((vicon_data[:9,0],0*np.ones(6)))
     # init covariance matrix
