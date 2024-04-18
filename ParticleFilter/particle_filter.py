@@ -4,7 +4,8 @@ import scipy.io
 from scipy import stats
 import pose_estimation as pe
 from scipy.spatial.transform import Rotation
-from numpy import sin,cos
+import matplotlib.pyplot as plt
+
 class PF():
     def __init__(self,N_STATE,N_OBS,N_INPUTS,N_PARTICLES):
         # store params
@@ -117,12 +118,14 @@ class PF():
 
         return pdf_value
 
-    def estimate(self):
-        # weighted average
-        return np.average(self.X,weights=self.W,axis=0)
-        # return np.mean(self.X,axis=0)
-        # idx = np.argmax(self.W)
-        # return self.X[idx]
+    def estimate(self,param='weighted average'):
+        if param == 'weighted average':
+            return np.average(self.X,weights=self.W,axis=0)
+        if param == 'average':
+            return np.mean(self.X,axis=0)
+        if param == 'highest weight':
+            idx = np.argmax(self.W)
+            return self.X[idx]
     
     def resample(self):
         '''
@@ -147,7 +150,49 @@ class PF():
         self.X = X_new
         self.W = np.ones(self.N_PARTICLES)/self.N_PARTICLES
     
-def ParticleFilter(N_PARTICLES,FILENAME):
+def RMSE(X,T):
+    # Calculate root mean squared error
+    rmse = np.sqrt(np.sum((X - T)**2, axis=0)/X.shape[1])
+    return rmse
+
+def calcRMSE(X1, X2, X3, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['weighted average','average','highest weight']):
+    # Load .mat file
+    curr_path = str(os.path.dirname(os.path.abspath(__file__)))
+    file_path = curr_path + '/data/' + FILENAME
+    mat_data = scipy.io.loadmat(file_path,simplify_cells=True)
+
+    # extract data
+    vicon_data = mat_data['vicon']
+    ground_truth = vicon_data[:6,:]
+    time_truth= mat_data['time']
+    
+    # interpolate estimated data to ground truth data
+    X1 = pe.interpolate_data(X1,time_est,time_truth)
+    X2 = pe.interpolate_data(X2,time_est,time_truth)
+    X3 = pe.interpolate_data(X3,time_est,time_truth)
+    
+    # calc RMSE
+    rmse1 = RMSE(X1,ground_truth)
+    rmse2 = RMSE(X2,ground_truth)
+    rmse3 = RMSE(X3,ground_truth)
+
+    avgRMSE = np.round(np.array([np.mean(rmse1),np.mean(rmse2),np.mean(rmse3)]),5)
+
+    if plot_rmse:
+        # plot rmse against time
+        plt.figure()
+        plt.plot(time_truth,rmse1,label=lb[0])
+        plt.plot(time_truth,rmse2,label=lb[1])
+        plt.plot(time_truth,rmse3,label=lb[2])
+        plt.xlabel('Time (s)')
+        plt.ylabel('RMSE')
+        plt.title('RMSE (N_Particles = {}, Data = {})'.format(N_PARTICLES,FILENAME))
+        plt.legend()
+        plt.show()
+
+    return rmse1, rmse2, rmse3, avgRMSE
+
+def ParticleFilter(N_PARTICLES,FILENAME,plot_pose=False,rmse=False):
     ## PARAMS
     N_STATE = 15           # state vector length
     N_OBS = 6              # observation vector length
@@ -166,17 +211,19 @@ def ParticleFilter(N_PARTICLES,FILENAME):
     # init PF
     pf = PF(N_STATE,N_OBS,N_INPUTS,N_PARTICLES)
     # init process noise
-    pf.Q = 500*np.diag([0.01,0.01,0.01,0.001,0.001,0.001,0.1,0.1,0.1,0.001,0.001,0.001,0.001,0.001,0.001]) # [0.01] * 3 + [0.002] * 3 + [0.1] * 3 + [0.001] * 3 + [0.001] * 3) * 500
+    pf.Q = 500*np.diag([0.01,0.01,0.01,0.001,0.001,0.001,0.1,0.1,0.1,0.001,0.001,0.001,0.001,0.001,0.001])
     # init measurement noise
-    pf.R = np.diag([0.005, 0.005, 0.01, 0.005, 0.01, 0.001])
+    pf.R = 1000*np.diag([0.001, 0.001, 0.001, 0.0001, 0.0001, 0.0001])
     # init input noise
     pf.Q_u *= 1e-3
     # init time
     t_prev = time_vicon[0]
 
-    # filtered states
-    X_filtered = np.full((15,vicon_data.shape[1]),np.nan)
-    t_filtered = np.full(len(time_vicon),np.nan)
+    # arrays to store filtered states
+    t_filtered = np.full(len(sensor_data),np.nan)
+    X_w_avg = np.full((N_STATE,len(sensor_data)),np.nan)
+    X_avg = np.full((N_STATE,len(sensor_data)),np.nan)
+    X_h_w = np.full((N_STATE,len(sensor_data)),np.nan)
 
     for i in range(len(sensor_data)):
         data = sensor_data[i]
@@ -195,28 +242,25 @@ def ParticleFilter(N_PARTICLES,FILENAME):
         z_curr = np.hstack((pos,euler))
 
         if len(z_curr)==0:
-            X_filtered[:,i] = np.full(len(pf.X),np.nan)
             t_filtered[i] = t_curr
             t_prev = t_curr
             continue
 
         pf.predict(u_curr,dt)
         pf.update(z_curr)
-        X_curr = pf.estimate()
+        X_w_avg[:,i] = pf.estimate('weighted average')
+        X_avg[:,i] = pf.estimate('average')
+        X_h_w[:,i] = pf.estimate('highest weight')
         pf.resample()
 
-        X_filtered[:,i] = X_curr
         t_filtered[i] = t_curr
         t_prev = t_curr
-        # print('Pos: ', X_curr[:3],'Euler: ', X_curr[3:6])
 
-    pos_filtered = X_filtered[:3,:]
-    euler_filtered = X_filtered[3:6,:]
+    # plot
+    if plot_pose: 
+        pos_filtered = X_w_avg[:3,:]
+        euler_filtered = X_w_avg[3:6,:]
+        pe.plot_pose(pos_filtered,euler_filtered,t_filtered,vicon_data[:3,:],vicon_data[3:6,:],time_vicon)
 
-    pe.plot_pose(pos_filtered,euler_filtered,t_filtered,vicon_data[:3,:],vicon_data[3:6,:],time_vicon)
-
-FILENAME = 'studentdata1.mat'
-# number of partciles
-M = 250
-
-ParticleFilter(M,FILENAME)
+    if rmse:
+        return X_w_avg[:6,:], X_avg[:6,:], X_h_w[:6,:], t_filtered
