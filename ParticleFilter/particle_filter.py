@@ -176,7 +176,8 @@ def calcRMSE(X1, X2, X3, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['we
     rmse2 = RMSE(X2,ground_truth)
     rmse3 = RMSE(X3,ground_truth)
 
-    avgRMSE = np.round(np.array([np.mean(rmse1),np.mean(rmse2),np.mean(rmse3)]),5)
+    avgRMSE = np.array([np.mean(rmse1),np.mean(rmse2),np.mean(rmse3)])
+    avgRMSE = np.round(avgRMSE,5)
 
     if plot_rmse:
         # plot rmse against time
@@ -190,7 +191,7 @@ def calcRMSE(X1, X2, X3, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['we
         plt.legend()
         plt.show()
 
-    return rmse1, rmse2, rmse3, avgRMSE
+    return avgRMSE
 
 def ParticleFilter(N_PARTICLES,FILENAME,plot_pose=False,rmse=False):
     ## PARAMS
@@ -264,3 +265,38 @@ def ParticleFilter(N_PARTICLES,FILENAME,plot_pose=False,rmse=False):
 
     if rmse:
         return X_w_avg[:6,:], X_avg[:6,:], X_h_w[:6,:], t_filtered
+    
+def ekf_pf_RMSE(X1, X2, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['EKF','PF']):
+    # Load .mat file
+    curr_path = str(os.path.dirname(os.path.abspath(__file__)))
+    file_path = curr_path + '/data/' + FILENAME
+    mat_data = scipy.io.loadmat(file_path,simplify_cells=True)
+
+    # extract data
+    vicon_data = mat_data['vicon']
+    ground_truth = vicon_data[:6,:]
+    time_truth= mat_data['time']
+    
+    # interpolate estimated data to ground truth data
+    X1 = pe.interpolate_data(X1,time_est,time_truth)
+    X2 = pe.interpolate_data(X2,time_est,time_truth)
+    
+    # calc RMSE
+    rmse1 = RMSE(X1,ground_truth)
+    rmse2 = RMSE(X2,ground_truth)
+
+    avgRMSE = np.array([np.mean(rmse1),np.mean(rmse2)])
+    avgRMSE = np.round(avgRMSE,5)
+
+    if plot_rmse:
+        # plot rmse against time
+        plt.figure()
+        plt.plot(time_truth,rmse1,label=lb[0])
+        plt.plot(time_truth,rmse2,label=lb[1])
+        plt.xlabel('Time (s)')
+        plt.ylabel('RMSE')
+        plt.title('RMSE (N_Particles = {}, Data = {})'.format(N_PARTICLES,FILENAME))
+        plt.legend()
+        plt.show()
+
+    return avgRMSE
