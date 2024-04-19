@@ -1,12 +1,34 @@
 import numpy as np
 import os
 import scipy.io
-from scipy import stats
 import pose_estimation as pe
-from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
 class PF():
+    """
+    Implements a Particle Filter (PF) for state estimation of dynamic systems with non-linear and/or non-Gaussian process and measurement models.
+
+    Constructor Inputs:
+        - N_STATE: Integer specifying the size of the state vector.
+        - N_OBS: Integer specifying the size of the observation vector.
+        - N_INPUTS: Integer specifying the size of the input vector.
+        - N_PARTICLES: Integer specifying the number of particles.
+
+    Attributes:
+        - X: Current state estimates for all particles as a numpy array (N_PARTICLES x N_STATE).
+        - W: Weights assigned to each particle representing its likelihood (N_PARTICLES numpy array).
+        - Q: Process noise covariance matrix (N_STATE x N_STATE numpy array).
+        - Q_u: Input noise covariance matrix (N_INPUTS x N_INPUTS numpy array).
+        - R: Measurement noise covariance matrix (N_OBS x N_OBS numpy array).
+
+    Methods:
+        - init_particles(): Initializes particles with random values and equal weights.
+        - predict(u, dt): Predicts the next state for all particles based on inputs and time step.
+        - update(z): Updates particle weights based on observations.
+        - estimate(param): Estimates the state based on specified parameter.
+        - resample(): Resamples particles using the low variance resampling algorithm.
+
+    """
     def __init__(self,N_STATE,N_OBS,N_INPUTS,N_PARTICLES):
         # store params
         self.N_STATE = N_STATE
@@ -151,11 +173,31 @@ class PF():
         self.W = np.ones(self.N_PARTICLES)/self.N_PARTICLES
     
 def RMSE(X,T):
+    """
+    Calculates the root mean squared error between two arrays.
+    Inputs:
+        - X (numpy array): Estimated values.
+        - T (numpy array): True values.
+    Outputs:
+        - rmse (numpy array): Root mean squared error.
+    """
     # Calculate root mean squared error
     rmse = np.sqrt(np.sum((X - T)**2, axis=0)/X.shape[1])
     return rmse
 
 def calcRMSE(X1, X2, X3, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['weighted average','average','highest weight']):
+    """
+    Calculates the root mean squared error (RMSE) between estimated values and ground truth data.
+    Inputs:
+        - X1, X2, X3 (numpy arrays): Estimated values from different methods.
+        - time_est (numpy array): Time array for estimated values.
+        - FILENAME (str): Name of the data file.
+        - N_PARTICLES (int): Number of particles used in estimation.
+        - plot_rmse (bool): Whether to plot the RMSE against time (default: False).
+        - lb (list of str): Labels for the different estimation methods (default: ['weighted average', 'average', 'highest weight']).
+    Outputs:
+        - avgRMSE (numpy array): Average RMSE for each estimation method.
+    """
     # Load .mat file
     curr_path = str(os.path.dirname(os.path.abspath(__file__)))
     file_path = curr_path + '/data/' + FILENAME
@@ -194,6 +236,17 @@ def calcRMSE(X1, X2, X3, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['we
     return avgRMSE
 
 def ParticleFilter(N_PARTICLES,FILENAME,plot_pose=False,rmse=False):
+    """
+    Executes the Particle Filter (PF) algorithm using sensor data
+    Inputs:
+        - N_PARTICLES (int): Number of particles.
+        - FILENAME (str): Name of the data file.
+        - plot_pose (bool): Whether to plot the estimated poses (default: False).
+        - rmse (bool): Whether to calculate RMSE (default: False).
+    Outputs: Depending on the value of rmse, it returns:
+        - rmse = True: Estimated values for different methods and corresponding times.
+        - rmse = False: None.
+    """
     ## PARAMS
     N_STATE = 15           # state vector length
     N_OBS = 6              # observation vector length
@@ -267,6 +320,18 @@ def ParticleFilter(N_PARTICLES,FILENAME,plot_pose=False,rmse=False):
         return X_w_avg[:6,:], X_avg[:6,:], X_h_w[:6,:], t_filtered
     
 def ekf_pf_RMSE(X1, X2, time_est, FILENAME, N_PARTICLES,plot_rmse=False,lb=['EKF','PF']):
+    """
+    Calculates the root mean squared error (RMSE) between estimated values using EKF and PF methods.
+    Inputs:
+        - X1, X2 (numpy arrays): Estimated values from EKF and PF methods, respectively.
+        - time_est (numpy array): Time array for estimated values.
+        - FILENAME (str): Name of the data file.
+        - N_PARTICLES (int): Number of particles used in PF.
+        - plot_rmse (bool): Whether to plot the RMSE against time (default: False).
+        - lb (list of str): Labels for the estimation methods (default: ['EKF', 'PF']).
+    Outputs:
+        - avgRMSE (numpy array): Average RMSE for each estimation method.
+    """
     # Load .mat file
     curr_path = str(os.path.dirname(os.path.abspath(__file__)))
     file_path = curr_path + '/data/' + FILENAME
