@@ -14,7 +14,7 @@ def skew(v):
     return V
 
 def wrap_to_360(angle):
-    return (angle + 360) % 360
+    return angle % 360
 
 def propagation_model(X_prev,w_i_b,f_b,dt):
     # extract prev states
@@ -25,7 +25,6 @@ def propagation_model(X_prev,w_i_b,f_b,dt):
 
     # attitude
     b_g = X_prev[12:]
-    # b_g = np.zeros(3)
     w_i_b = w_i_b - b_g
     
     w_e = earth.RATE*np.array([0,0,1])
@@ -51,7 +50,6 @@ def propagation_model(X_prev,w_i_b,f_b,dt):
 
     ###### VELOCITY UPDATE
     b_a = X_prev[9:12]
-    # b_a = np.zeros(3)
     f_b = f_b - b_a
 
     f_n = 0.5 * (R_prev + R_curr) @ f_b
@@ -105,8 +103,9 @@ def getSigmaPts(mean, covariance, kappa=1):
 
 def prediction(X_prev,P_prev,w_curr,a_curr,dt):
     # process noise     
-    Q = np.diag([2.5,2.5,10,10,10,10,2.5,2.5,2.5,1e-2,1e-2,1e-2,1e-2,1e-2,1e-2])                          
-    # Q = 1e-3*np.eye(N_STATE)
+    Q = np.diag([100,100,10000,0.5,0.5,0.5,1,1,1,1e-3,1e-3,1e-3,1e-3,1e-3,1e-3])
+    # Q = 1e-2*np.eye(N_STATE)                          
+    # Q = 1e3*np.eye(N_STATE)
     # get sigma points
     X_s, W_m, W_c = getSigmaPts(X_prev,P_prev)
 
@@ -135,7 +134,8 @@ def obs_model(X_prev,R):
 
 def update(X_est,P_est,Z_m,X_s_est):
     # measurement model covariance
-    R = np.diag([1,1,10,2.5,2.5,2.5])
+    # R = np.diag([1,1,10,2.5,2.5,2.5])
+    R = 1e-3*np.eye(N_OBS)
     
     # get sigma points with estimated mean and covariance
     Z_s, W_m, W_c = getSigmaPts(X_est,P_est)
@@ -198,8 +198,8 @@ p = ground_truth[0,0:3].copy()
 q = ground_truth[0,3:6].copy()
 
 X_prev = np.hstack((p,q,np.zeros(9)))
-# P_prev = 1e-2*np.eye(N_STATE)
-P_prev = np.diag([1e-2,1e-2,1e-2,1e-2,1e-2,1e-2,10,10,10,1e-2,1e-2,1e-2,1e-2,1e-2,1e-2])
+P_prev = 1e-2*np.eye(N_STATE)
+# P_prev = np.diag([1e-2,1e-2,1e-2,1e-2,1e-2,1e-2,10,10,10,1e-2,1e-2,1e-2,1e-2,1e-2,1e-2])
 
 X_curr = np.full((N_STATE,len(time)),np.nan)
 # init filtered state var
