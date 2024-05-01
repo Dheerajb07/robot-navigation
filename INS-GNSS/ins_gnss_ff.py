@@ -2,7 +2,7 @@ import os
 import numpy as np
 import earth
 from scipy.spatial.transform import Rotation
-from plot_pose import plot_pose
+from plot_utils import plot_pose,plot_error,plot_haversine
 from tqdm import tqdm
 
 from ukf import UKF
@@ -83,7 +83,7 @@ def wrap_angle(angle):
         angle -= 180
     return angle
 
-def ins_gnss_fb():
+def ins_gnss_ff():
     # load data
     curr_path = str(os.path.dirname(os.path.abspath(__file__)))
     file_name = '/trajectory_data.csv'
@@ -105,10 +105,10 @@ def ins_gnss_fb():
     # init filter
     ukf = UKF(N_STATE,N_OBS,propagation_model,obs_model)
     # process noise     
-    Q = np.diag([10,10,10000,100,100,100,100,100,100,100,100,10000])
+    Q = np.diag([1,1,100,1,1,1,1,1,1,1e20,1e20,1e20])
     # Q = 10*np.eye(N_STATE)
     # measurement model covariance
-    R = 1e-3*np.diag([1,1,100])
+    R = 1*np.diag([1,1,100])
 
     p = ground_truth[0,0:3].copy()
     q = ground_truth[0,3:6].copy()
@@ -157,4 +157,9 @@ def ins_gnss_fb():
 
     plot_pose(pos_filtered,euler_filtered,time,ground_truth[:,:3].T,ground_truth[:,3:6].T,time)
 
-ins_gnss_fb()
+    # plot pose and orientation
+    plot_pose(pos_filtered,euler_filtered,time,ground_truth[:,:3].T,ground_truth[:,3:6].T,time)
+    # plot pose and orientation error
+    plot_error(pos_filtered,ground_truth[:,:3].T,euler_filtered,ground_truth[:,3:6].T,time)
+    # plot haversine
+    plot_haversine(pos_filtered,ground_truth[:,:3].T,time)

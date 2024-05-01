@@ -2,7 +2,7 @@ import os
 import numpy as np
 import earth
 from scipy.spatial.transform import Rotation
-from plot_pose import plot_pose
+from plot_utils import plot_pose, plot_error, plot_haversine
 from tqdm import tqdm
 from ukf import UKF
 
@@ -80,6 +80,8 @@ def obs_model(X_prev,R):
     Z_est = np.hstack((p,pdot)) + np.random.multivariate_normal(np.zeros(len(R)),R)
     return Z_est
 
+
+
 def ins_gnss_fb():
     # load data
     curr_path = str(os.path.dirname(os.path.abspath(__file__)))
@@ -137,7 +139,11 @@ def ins_gnss_fb():
 
     pos_filtered = X_filtered[:3,:]
     euler_filtered = X_filtered[3:6,:]
-    # np.save()
+    # plot pose and orientation
     plot_pose(pos_filtered,euler_filtered,time,ground_truth[:,:3].T,ground_truth[:,3:6].T,time)
+    # plot pose and orientation error
+    plot_error(pos_filtered,ground_truth[:,:3].T,euler_filtered,ground_truth[:,3:6].T,time)
+    # plot haversine
+    plot_haversine(pos_filtered,ground_truth[:,:3].T,time)
 
-ins_gnss_fb()
+# ins_gnss_fb()
